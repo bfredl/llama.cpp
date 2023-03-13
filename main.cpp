@@ -1075,52 +1075,46 @@ struct lua_model {
     gpt_vocab vocab;
     llama_model model;
 
-    int sample(lua_State *L);
+  // TODO: set me
+  int32_t top_k = 40;
+  float   top_p = 0.95f;
+  float   temp  = 0.80f;
+  float   repeat_penalty  = 1.30f;
+
+  std::mt19937 rng;
+
+  int n_past = 0;
+  int n_threads = 4;
+
+  std::vector<float> logits;
+
+  lua_model(int seed) : rng(seed) {};
+
+  int load_prompt(lua_State *L);
+  int sample(lua_State *L);
 };
 
 // testing: TESTING TESTING
 static lua_model *testing = NULL;
 
 static int lua_load_model(lua_State *L) {
+  int32_t seed = -1;  // as a past time activity
+
   // TODO: obviously a userdata
-  testing = new lua_model;
+  testing = new lua_model(seed);
   const char *loadpath = luaL_checkstring(L, 1);
 
   llama_model_load(loadpath, testing->model, testing->vocab, 512);
   return 0;
 }
 
-int lua_model::sample(lua_State *L) {
+int lua_model::load_prompt(lua_State *L) {
   const char *prompt = luaL_checkstring(L, 1);
-  int n_predict = 512;
-  if (lua_gettop(L) > 1) {
-    n_predict = luaL_checknumber(L, 2);
-  }
-
   std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, prompt, true);
 
-  n_predict = std::min(n_predict, model.hparams.n_ctx - (int) embd_inp.size());
-
-  int last_n_size = 0; // TODO: not implemented below
-  std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
   std::vector<gpt_vocab::id> embd;
-  std::vector<gpt_vocab::id> sampled;
-  std::vector<float> logits;
   size_t mem_per_token = 0;
 
-
-  int n_past = 0;
-  int n_threads = 4;
-  const int n_vocab = model.hparams.n_vocab;
-
-  // TODO: set me
-  int32_t top_k = 40;
-  float   top_p = 0.95f;
-  float   temp  = 0.80f;
-  float   repeat_penalty  = 1.30f;
-  int32_t seed = -1;  // as a past time activity
-
-  std::mt19937 rng(seed);
 
   for (auto id : embd_inp) {
     // main loop evauluates only one input token at a time, likely we could do more?
@@ -1133,12 +1127,34 @@ int lua_model::sample(lua_State *L) {
     embd.clear();
   }
 
-  for (int i = 0; ; ) {
+  return 0;
+}
+
+int lua_model::sample(lua_State *L) {
+  int n_predict = 512;
+  n_predict = luaL_checknumber(L, 1);
+
+  int last_n_size = 0; // TODO: DUMMY, not implemented
+  std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
+  std::vector<gpt_vocab::id> sampled;
+  size_t mem_per_token = 0;
+
+  std::vector<gpt_vocab::id> embd;
+
+  const int n_vocab = model.hparams.n_vocab;
+
+  // cannot sample more
+  if (n_past > model.hparams.n_ctx) {
+    return 0;
+  }
+
+  for (int i = 0; i < n_predict ; i++) {
     auto id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
     sampled.push_back(id);
 
     // out of context
-    if (n_past >= model.hparams.n_ctx || ++i == n_predict) {
+    if (n_past >= model.hparams.n_ctx) {
+      n_past++; // don't sample last token again
       break;
     }
 
@@ -1161,12 +1177,17 @@ int lua_model::sample(lua_State *L) {
   return 1;
 }
 
+static int lua_load_prompt(lua_State *L) {
+  return testing ? testing->load_prompt(L) : luaL_error(L, "WHATEHF-");
+}
+
 static int lua_sample(lua_State *L) {
   return testing ? testing->sample(L) : luaL_error(L, "WHATEHF-");
 }
 
 static const luaL_reg llama_functions[] = {
   {"load_model", lua_load_model},
+  {"load_prompt", lua_load_prompt},
   {"sample", lua_sample},
   {NULL, NULL}
 };
