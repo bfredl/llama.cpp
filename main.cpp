@@ -1079,7 +1079,10 @@ struct lua_model {
   int32_t top_k = 40;
   float   top_p = 0.95f;
   float   temp  = 0.80f;
-  float   repeat_penalty  = 1.30f;
+  float   repeat_penalty  = 1.10f;
+
+  int last_n_size = 64;
+  std::vector<gpt_vocab::id> last_n_tokens;
 
   std::mt19937 rng;
 
@@ -1135,6 +1138,7 @@ int lua_model::load_prompt(lua_State *L) {
 
   if (reset) {
     n_past = 0;
+    last_n_tokens.clear();
   }
 
   std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, prompt, n_past == 0);
@@ -1147,6 +1151,12 @@ int lua_model::load_prompt(lua_State *L) {
   for (auto id : embd_inp) {
     // main loop evauluates only one input token at a time, likely we could do more?
     embd.push_back(id);
+
+    if (last_n_tokens.size() >= last_n_size) {
+      last_n_tokens.erase(last_n_tokens.begin());
+    }
+    last_n_tokens.push_back(id);
+
     if (!llama_eval(model, n_threads, n_past, embd, logits, mem_per_token)) {
         printf("Failed to predict\n");
         return 0;
@@ -1162,8 +1172,6 @@ int lua_model::sample(lua_State *L) {
   int n_predict = 512;
   n_predict = luaL_checknumber(L, 1);
 
-  int last_n_size = 0; // TODO: DUMMY, not implemented
-  std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
   std::vector<gpt_vocab::id> sampled;
   size_t mem_per_token = 0;
 
@@ -1185,6 +1193,11 @@ int lua_model::sample(lua_State *L) {
       n_past++; // don't sample last token again
       break;
     }
+
+    if (last_n_tokens.size() >= last_n_size) {
+      last_n_tokens.erase(last_n_tokens.begin());
+    }
+    last_n_tokens.push_back(id);
 
     embd.push_back(id);
     if (!llama_eval(model, n_threads, n_past, embd, logits, mem_per_token)) {
