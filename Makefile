@@ -31,7 +31,7 @@ endif
 #
 
 CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC -I./include/
 LDFLAGS  =
 
 # OS specific
@@ -176,7 +176,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize
+default: llama.so quantize
 
 #
 # Build library
@@ -191,9 +191,8 @@ utils.o: utils.cpp utils.h
 clean:
 	rm -f *.o main quantize
 
-main: main.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
-	./main -h
+llama.so: main.cpp ggml.o utils.o
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o llama.so -shared $(LDFLAGS)
 
 quantize: quantize.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)

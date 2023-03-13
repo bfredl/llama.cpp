@@ -11,6 +11,13 @@
 #include <string>
 #include <vector>
 
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+}
+
+
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
@@ -785,7 +792,14 @@ const char * llama_print_system_info(void) {
     return s.c_str();
 }
 
+#ifdef ORIG_MAIN
+int main_orig(int argc, char ** argv);
 int main(int argc, char ** argv) {
+  return main_orig(argc, argv);
+}
+#endif
+
+int main_orig(int argc, char ** argv) {
     ggml_time_init();
     const int64_t t_main_start_us = ggml_time_us();
 
@@ -1053,4 +1067,23 @@ int main(int argc, char ** argv) {
     ggml_free(model.ctx);
 
     return 0;
+}
+
+
+// luuuuuua
+
+int lua_dumdum(lua_State *L) {
+  return 0;
+}
+
+static const luaL_reg llama_functions[] = {
+  {"dumdum", lua_dumdum},
+  {NULL, NULL}
+};
+
+extern "C" int luaopen_llama(lua_State *L) {
+  // module
+  lua_newtable(L);
+  luaL_register(L, NULL, llama_functions);
+  return 1;
 }
