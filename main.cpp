@@ -577,7 +577,6 @@ bool llama_eval(
 
     struct ggml_context * ctx0 = ggml_init(params);
     ggml_cgraph gf = {};
-    gf.n_threads = n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, embd_inp.data(), N*ggml_element_size(embd));
@@ -1072,12 +1071,103 @@ int main_orig(int argc, char ** argv) {
 
 // luuuuuua
 
-int lua_dumdum(lua_State *L) {
+struct lua_model {
+    gpt_vocab vocab;
+    llama_model model;
+
+    int sample(lua_State *L);
+};
+
+// testing: TESTING TESTING
+static lua_model *testing = NULL;
+
+static int lua_load_model(lua_State *L) {
+  // TODO: obviously a userdata
+  testing = new lua_model;
+  const char *loadpath = luaL_checkstring(L, 1);
+
+  llama_model_load(loadpath, testing->model, testing->vocab, 512);
   return 0;
 }
 
+int lua_model::sample(lua_State *L) {
+  const char *prompt = luaL_checkstring(L, 1);
+  int n_predict = 512;
+  if (lua_gettop(L) > 1) {
+    n_predict = luaL_checknumber(L, 2);
+  }
+
+  std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, prompt, true);
+
+  n_predict = std::min(n_predict, model.hparams.n_ctx - (int) embd_inp.size());
+
+  int last_n_size = 0; // TODO: not implemented below
+  std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
+  std::vector<gpt_vocab::id> embd;
+  std::vector<gpt_vocab::id> sampled;
+  std::vector<float> logits;
+  size_t mem_per_token = 0;
+
+
+  int n_past = 0;
+  int n_threads = 4;
+  const int n_vocab = model.hparams.n_vocab;
+
+  // TODO: set me
+  int32_t top_k = 40;
+  float   top_p = 0.95f;
+  float   temp  = 0.80f;
+  float   repeat_penalty  = 1.30f;
+  int32_t seed = -1;  // as a past time activity
+
+  std::mt19937 rng(seed);
+
+  for (auto id : embd_inp) {
+    // main loop evauluates only one input token at a time, likely we could do more?
+    embd.push_back(id);
+    if (!llama_eval(model, n_threads, n_past, embd, logits, mem_per_token)) {
+        printf("Failed to predict\n");
+        return 0;
+    }
+    n_past++;
+    embd.clear();
+  }
+
+  for (int i = 0; ; ) {
+    auto id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
+    sampled.push_back(id);
+
+    // out of context
+    if (n_past >= model.hparams.n_ctx || ++i == n_predict) {
+      break;
+    }
+
+    embd.push_back(id);
+    if (!llama_eval(model, n_threads, n_past, embd, logits, mem_per_token)) {
+        printf("Failed to predict\n");
+        return 0;
+    }
+    n_past++;
+    embd.clear();
+  }
+
+  lua_createtable(L, sampled.size(), 0);
+  int idx = 1;
+  for (auto id : sampled) {
+    lua_pushstring(L, vocab.id_to_token[id].c_str());
+    lua_rawseti(L, -2, idx++);
+  }
+
+  return 1;
+}
+
+static int lua_sample(lua_State *L) {
+  return testing ? testing->sample(L) : luaL_error(L, "WHATEHF-");
+}
+
 static const luaL_reg llama_functions[] = {
-  {"dumdum", lua_dumdum},
+  {"load_model", lua_load_model},
+  {"sample", lua_sample},
   {NULL, NULL}
 };
 
