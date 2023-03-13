@@ -1,6 +1,7 @@
+if not l then
 l = require'llama'
-
 l.load_model 'models/7B/ggml-model-q4_0.bin'
+end
 
 prompt = 'kalle anka vill ha'
 prompt = "l = require'llama'\n"
@@ -20,28 +21,17 @@ function runn(prompt)
   end
 end
 
-runn [[manuscript 1: skinners house
-[mood: comedic]
-Skinner: welcome to dinner!
-Chalmers: well it cannot be worse than last time
-Skinner: here is an omelette!
-Chalmers: but I asked for a sandwich
-Skinner: it is an old family recipe :)
-Chalmers: SO YOUR FOOD]]
-
-runn [[l.tokenize(prompt)
-
-function runn(prompt)
-  coroutine.yield('\n')
-  l.load_prompt(prompt, true)
-  coroutine.yield(prompt)
-  for i = 1,1000 do
-    utput = l.sample(1)
-    if utput == nil then
-      break
-    end
-    coroutine.yield(table.concat(utput))
+function runn_buf()
+  coroutine.yield('\n============\n')
+  local text = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false),'\n')
+  if #text > 0 then
+    runn(text)
   end
 end
+vim.keymap.set('n', '<cr>', function() require'luadev'.coro_run(runn_buf) end)
 
-function]]
+if false then
+runn [[consider the following:
+
+A large text model would never]]
+end
