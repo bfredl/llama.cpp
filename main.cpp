@@ -1090,8 +1090,11 @@ struct lua_model {
 
   lua_model(int seed) : rng(seed) {};
 
+  void lua_pushtokens(lua_State *L, std::vector<gpt_vocab::id> &embed);
+
   int load_prompt(lua_State *L);
   int sample(lua_State *L);
+  int tokenize(lua_State *L);
 };
 
 // testing: TESTING TESTING
@@ -1108,9 +1111,34 @@ static int lua_load_model(lua_State *L) {
   return 0;
 }
 
+void lua_model::lua_pushtokens(lua_State *L, std::vector<gpt_vocab::id> &embed) {
+  lua_createtable(L, embed.size(), 0);
+  int idx = 1;
+  for (auto id : embed) {
+    lua_pushstring(L, vocab.id_to_token[id].c_str());
+    lua_rawseti(L, -2, idx++);
+  }
+
+}
+
+int lua_model::tokenize(lua_State *L) {
+  const char *prompt = luaL_checkstring(L, 1);
+  std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, prompt, false);
+
+  lua_pushtokens(L, embd_inp);
+  return 1;
+}
+
 int lua_model::load_prompt(lua_State *L) {
   const char *prompt = luaL_checkstring(L, 1);
-  std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, prompt, true);
+  bool reset = lua_toboolean(L, 2);
+
+  if (reset) {
+    n_past = 0;
+  }
+
+  std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, prompt, n_past == 0);
+
 
   std::vector<gpt_vocab::id> embd;
   size_t mem_per_token = 0;
@@ -1167,14 +1195,13 @@ int lua_model::sample(lua_State *L) {
     embd.clear();
   }
 
-  lua_createtable(L, sampled.size(), 0);
-  int idx = 1;
-  for (auto id : sampled) {
-    lua_pushstring(L, vocab.id_to_token[id].c_str());
-    lua_rawseti(L, -2, idx++);
-  }
+  lua_pushtokens(L, sampled);
 
   return 1;
+}
+
+static int lua_tokenize(lua_State *L) {
+  return testing ? testing->tokenize(L) : luaL_error(L, "WHATEHF-");
 }
 
 static int lua_load_prompt(lua_State *L) {
@@ -1187,6 +1214,7 @@ static int lua_sample(lua_State *L) {
 
 static const luaL_reg llama_functions[] = {
   {"load_model", lua_load_model},
+  {"tokenize", lua_tokenize},
   {"load_prompt", lua_load_prompt},
   {"sample", lua_sample},
   {NULL, NULL}
