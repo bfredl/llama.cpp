@@ -32,7 +32,7 @@ endif
 
 # keep standard at C11 and C++11
 CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC -I./include/
 LDFLAGS  =
 
 # warnings
@@ -132,8 +132,9 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize perplexity embedding
+default: main lua quantize perplexity embedding
 
+lua: llama.so
 #
 # Build library
 #
@@ -155,6 +156,9 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+
+llama.so: examples/lua/lua.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/lua/lua.cpp ggml.o llama.o common.o -o llama.so -shared $(LDFLAGS)
 
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)

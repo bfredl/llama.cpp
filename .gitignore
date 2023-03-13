@@ -23,6 +23,7 @@ models/*
 /perplexity
 /embedding
 /Pipfile
+/llama.so
 
 arm_neon.h
 compile_commands.json

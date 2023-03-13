@@ -1,0 +1,7 @@
+-I.
+-I./examples
+-O3
+-DNDEBUG
+-std=c++11
+-fPIC
+-I./include/
