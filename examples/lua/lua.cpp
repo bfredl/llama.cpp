@@ -35,7 +35,7 @@ struct lua_model {
   std::mt19937 rng;
 
   int n_past = 0;
-  int n_threads = 4;
+  int n_threads = 8;
 
   std::vector<float> logits;
 
@@ -53,6 +53,10 @@ static lua_model *testing = NULL;
 
 static int lua_load_model(lua_State *L) {
   const char *loadpath = luaL_checkstring(L, 1);
+  int n_threads = -1;
+  if (lua_gettop(L) >= 2) {
+    n_threads = luaL_checkinteger(L, 2);
+  }
 
   auto params = llama_context_default_params();
 
@@ -62,6 +66,9 @@ static int lua_load_model(lua_State *L) {
   // params.use_mlock  = params.use_mlock;
   // TODO: obviously a userdata
   testing = new lua_model(params.seed);
+  if (n_threads > 0) {
+    testing->n_threads = n_threads;
+  }
 
   testing->ctx = llama_init_from_file(loadpath, params);
   if (testing->ctx == NULL) {
