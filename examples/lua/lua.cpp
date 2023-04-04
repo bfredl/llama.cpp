@@ -62,6 +62,7 @@ static int lua_load_model(lua_State *L) {
 
   params.seed = time(NULL);
   params.n_ctx = 512;
+  params.quiet = true; // shhhh!
   // params.f16_kv     = params.memory_f16;
   // params.use_mlock  = params.use_mlock;
   // TODO: obviously a userdata

@@ -296,6 +296,7 @@ struct llama_context_params llama_context_default_params() {
         /*.vocab_only                  =*/ false,
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
+        /*.quiet                       =*/ false,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
     };
@@ -366,9 +367,10 @@ static bool llama_model_load(
         int n_parts,
         ggml_type memory_type,
         bool vocab_only,
+        bool quiet,
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
-    fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
+    if (!quiet) fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     lctx.t_start_us = ggml_time_us();
 
@@ -456,17 +458,19 @@ static bool llama_model_load(
             model.type = e_model::MODEL_65B;
         }
 
-        fprintf(stderr, "%s: n_vocab = %d\n", __func__, hparams.n_vocab);
-        fprintf(stderr, "%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
-        fprintf(stderr, "%s: n_embd  = %d\n", __func__, hparams.n_embd);
-        fprintf(stderr, "%s: n_mult  = %d\n", __func__, hparams.n_mult);
-        fprintf(stderr, "%s: n_head  = %d\n", __func__, hparams.n_head);
-        fprintf(stderr, "%s: n_layer = %d\n", __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot   = %d\n", __func__, hparams.n_rot);
-        fprintf(stderr, "%s: f16     = %d\n", __func__, hparams.f16);
-        fprintf(stderr, "%s: n_ff    = %d\n", __func__, n_ff);
-        fprintf(stderr, "%s: n_parts = %d\n", __func__, n_parts);
-        fprintf(stderr, "%s: type    = %d\n", __func__, model.type);
+        if (!quiet) {
+            fprintf(stderr, "%s: n_vocab = %d\n", __func__, hparams.n_vocab);
+            fprintf(stderr, "%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
+            fprintf(stderr, "%s: n_embd  = %d\n", __func__, hparams.n_embd);
+            fprintf(stderr, "%s: n_mult  = %d\n", __func__, hparams.n_mult);
+            fprintf(stderr, "%s: n_head  = %d\n", __func__, hparams.n_head);
+            fprintf(stderr, "%s: n_layer = %d\n", __func__, hparams.n_layer);
+            fprintf(stderr, "%s: n_rot   = %d\n", __func__, hparams.n_rot);
+            fprintf(stderr, "%s: f16     = %d\n", __func__, hparams.f16);
+            fprintf(stderr, "%s: n_ff    = %d\n", __func__, n_ff);
+            fprintf(stderr, "%s: n_parts = %d\n", __func__, n_parts);
+            fprintf(stderr, "%s: type    = %d\n", __func__, model.type);
+        }
     }
 
     // load vocab
@@ -529,7 +533,7 @@ static bool llama_model_load(
         return false;
     }
     mm_addr = (char *)model.mm_addr;
-    fprintf(stderr, "%s: ggml map size = %6.2f MB\n", __func__, model.mm_length/(1024.0*1024.0));
+    if (!quiet) fprintf(stderr, "%s: ggml map size = %6.2f MB\n", __func__, model.mm_length/(1024.0*1024.0));
 
     auto & ctx = model.ctx;
 
@@ -538,11 +542,11 @@ static bool llama_model_load(
         const auto &hparams = model.hparams;
         const int n_layer = hparams.n_layer;
         ctx_size += (5 + 10*n_layer)*256; // object overhead
-        fprintf(stderr, "%s: ggml ctx size = %6.2f KB\n", __func__, ctx_size/1024.0);
+        if (!quiet) fprintf(stderr, "%s: ggml ctx size = %6.2f KB\n", __func__, ctx_size/1024.0);
     }
 
     // print memory requirements
-    {
+    if (!quiet) {
         const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
 
         // this is the total memory required to run the inference
@@ -637,7 +641,7 @@ static bool llama_model_load(
         progress_callback(0.0, progress_callback_user_data);
     }
 
-    fprintf(stderr, "%s: loading tensors from '%s'\n", __func__, fname.c_str());
+    if (!quiet) fprintf(stderr, "%s: loading tensors from '%s'\n", __func__, fname.c_str());
 
     // load weights
     {
@@ -719,7 +723,7 @@ static bool llama_model_load(
 
         fin.close();
 
-        fprintf(stderr, "%s: model size = %8.2f MB / num tensors = %d\n", __func__, total_size/1024.0/1024.0, model.n_loaded);
+        if (!quiet) fprintf(stderr, "%s: model size = %8.2f MB / num tensors = %d\n", __func__, total_size/1024.0/1024.0, model.n_loaded);
         if (model.n_loaded == 0) {
             fprintf(stderr, "%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
         } else if (model.n_loaded != (int) model.tensors.size()) {
@@ -1601,7 +1605,7 @@ struct llama_context * llama_init_from_file(
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, memory_type,
-                          params.vocab_only, params.progress_callback,
+                          params.vocab_only, params.quiet, params.progress_callback,
                           params.progress_callback_user_data)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         llama_free(ctx);
@@ -1631,7 +1635,7 @@ struct llama_context * llama_init_from_file(
 
         {
             const size_t memory_size = ggml_nbytes(ctx->model.kv_self.k) + ggml_nbytes(ctx->model.kv_self.v);
-            fprintf(stderr, "%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+            if (!params.quiet) fprintf(stderr, "%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
 
         const auto & hparams = ctx->model.hparams;

@@ -1,8 +1,8 @@
 if not l then
 l = require'llama'
 -- l.load_model 'models/7B/ggml-model-q4_0.bin'
--- l.load_model 'models/13B/ggml-model-q4_0.bin'
-l.load_model ('models/30B/ggml-model-q4_0.bin', 8)
+l.load_model ('models/13B/ggml-model-q4_0.bin', 12)
+-- l.load_model ('models/30B/ggml-model-q4_0.bin', 12)
 end
 
 prompt = 'kalle anka vill ha'
