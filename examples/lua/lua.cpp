@@ -46,6 +46,7 @@ struct lua_model {
   int load_prompt(lua_State *L);
   int sample(lua_State *L);
   int tokenize(lua_State *L);
+  int get_token(lua_State *L);
 };
 
 // testing: TESTING TESTING
@@ -94,6 +95,16 @@ int lua_model::tokenize(lua_State *L) {
 
   lua_pushtokens(L, embd_inp);
   return 1;
+}
+
+int lua_model::get_token(lua_State *L) {
+  const ptrdiff_t idx = luaL_checkinteger(L, 1);
+  if (idx > 0 and idx < llama_n_vocab(ctx)) {
+    lua_pushstring(L, llama_token_to_str(ctx, idx));
+    return 1;
+  }
+
+  return 0;
 }
 
 int lua_model::load_prompt(lua_State *L) {
@@ -197,11 +208,17 @@ static int lua_sample(lua_State *L) {
   return testing ? testing->sample(L) : luaL_error(L, "WHATEHF-");
 }
 
+static int lua_get_token(lua_State *L) {
+  return testing ? testing->get_token(L) : luaL_error(L, "WHATEHF-");
+}
+
+
 static const luaL_reg llama_functions[] = {
   {"load_model", lua_load_model},
   {"tokenize", lua_tokenize},
   {"load_prompt", lua_load_prompt},
   {"sample", lua_sample},
+  {"get_token", lua_get_token},
   {NULL, NULL}
 };
 
